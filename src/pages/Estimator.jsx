@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   Calculator, Sparkles, AlertCircle, Loader2,
-  Save, RefreshCw, Info, ChevronDown, ChevronUp, Trash2
+  Save, Info, ChevronDown, ChevronUp, Trash2, FolderOpen
 } from 'lucide-react';
 import { estimateStorage } from '../services/storage';
 import { analyzeProjectForEstimate, checkOllamaAvailability } from '../services/ai';
+import {
+  Button, ClayCard, IconTile, Field, Input, Textarea, Select,
+  EmptyState, PageHeader, Segmented
+} from '../components/ui';
 
 const CATEGORIES = [
   'Web Development', 'Mobile App', 'UI/UX Design', 'Graphic Design',
@@ -29,7 +33,7 @@ const EMPTY_FORM = {
 };
 
 function formatCurrency(amount, currency) {
-  if (!amount || isNaN(amount)) return '—';
+  if (amount === undefined || amount === null || isNaN(amount)) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 }
 
@@ -39,12 +43,7 @@ function calcEstimate(form) {
   const fixed = parseFloat(form.fixedPrice) || 0;
   const extras = parseFloat(form.additionalExpenses) || 0;
 
-  let labor = 0;
-  if (form.pricingPreference === 'hourly') {
-    labor = hours * rate;
-  } else {
-    labor = fixed;
-  }
+  const labor = form.pricingPreference === 'hourly' ? hours * rate : fixed;
 
   const complexityMultipliers = { Simple: 0.1, Moderate: 0.15, Complex: 0.2, 'Very Complex': 0.25 };
   const contingencyRate = complexityMultipliers[form.complexity] || 0.15;
@@ -64,73 +63,61 @@ function calcEstimate(form) {
 function EstimateResult({ calc, form, aiInsights }) {
   const [showInsights, setShowInsights] = useState(true);
   const fmt = (n) => formatCurrency(n, form.currency);
+  const rows = [];
+  if (form.pricingPreference === 'hourly') rows.push([`${calc.hours}h × ${fmt(parseFloat(form.hourlyRate) || 0)}/hr`, fmt(calc.labor)]);
+  else rows.push(['Fixed project fee', fmt(calc.labor)]);
+  if (calc.additionalExpenses > 0) rows.push(['Additional expenses', fmt(calc.additionalExpenses)]);
+  rows.push([`Contingency (${calc.contingencyRate.toFixed(0)}% · ${form.complexity})`, fmt(calc.contingency)]);
 
   return (
     <div className="space-y-4">
-      {/* Numbers */}
-      <div className="bg-[#1e293b]/60 border border-[#334155] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#334155] flex items-center gap-2">
-          <Calculator size={15} className="text-purple-400" />
-          <h3 className="text-sm font-semibold text-white">Estimate Breakdown</h3>
+      <ClayCard flat className="overflow-hidden">
+        <div className="px-5 py-4 border-b border-line flex items-center gap-3">
+          <IconTile icon={Calculator} tone="lav" size="sm" />
+          <h3 className="text-sm font-semibold text-ink">Estimate breakdown</h3>
         </div>
-        <div className="p-5 space-y-2.5">
-          {form.pricingPreference === 'hourly' && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">{calc.hours}h × {fmt(parseFloat(form.hourlyRate) || 0)}/hr</span>
-              <span className="text-white font-medium">{fmt(calc.labor)}</span>
+        <div className="p-5 space-y-3">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4 text-sm">
+              <span className="text-muted">{label}</span>
+              <span className="text-ink font-medium whitespace-nowrap">{value}</span>
             </div>
-          )}
-          {form.pricingPreference === 'fixed' && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Fixed project fee</span>
-              <span className="text-white font-medium">{fmt(calc.labor)}</span>
-            </div>
-          )}
-          {calc.additionalExpenses > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Additional expenses</span>
-              <span className="text-white font-medium">{fmt(calc.additionalExpenses)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-400">Contingency ({calc.contingencyRate.toFixed(0)}% for {form.complexity})</span>
-            <span className="text-white font-medium">{fmt(calc.contingency)}</span>
-          </div>
-          <div className="h-px bg-[#334155] my-2" />
-          <div className="flex justify-between">
-            <span className="text-slate-300 font-semibold">Estimated Total</span>
-            <span className="text-white font-bold text-lg">{fmt(calc.total)}</span>
+          ))}
+          <div className="h-px bg-line" />
+          <div className="flex items-center justify-between">
+            <span className="text-ink font-semibold">Estimated total</span>
+            <span className="text-2xl font-bold text-ink">{fmt(calc.total)}</span>
           </div>
         </div>
-        <div className="px-5 py-3 bg-amber-500/5 border-t border-amber-500/10">
-          <p className="text-xs text-amber-300/70">
-            ⚠ This is a suggested estimate, not a guaranteed market price. Adjust based on your actual situation before quoting.
+        <div className="px-5 py-3.5 border-t border-line" style={{ background: 'var(--c-warning-soft)' }}>
+          <p className="text-xs text-inkbody/90 flex items-start gap-2">
+            <Info size={13} className="text-[var(--c-warning)] mt-0.5 flex-shrink-0" />
+            A suggested estimate, not a guaranteed market price. Adjust for your actual situation before quoting.
           </p>
         </div>
-      </div>
+      </ClayCard>
 
-      {/* AI Insights */}
       {aiInsights && (
-        <div className="bg-[#1e293b]/40 border border-[#334155] rounded-xl overflow-hidden">
+        <ClayCard flat className="overflow-hidden">
           <button
-            className="w-full flex items-center justify-between px-5 py-3 border-b border-[#334155] hover:bg-[#1e293b]/60 transition-colors"
-            onClick={() => setShowInsights(!showInsights)}
+            type="button"
+            className="w-full flex items-center justify-between px-5 py-4 border-b border-line"
+            onClick={() => setShowInsights(s => !s)}
           >
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-blue-400" />
-              <span className="text-sm font-semibold text-white">AI Project Analysis</span>
-              <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">✦ AI</span>
+            <div className="flex items-center gap-3">
+              <IconTile icon={Sparkles} tone="accent" size="sm" />
+              <span className="text-sm font-semibold text-ink">AI project analysis</span>
             </div>
-            {showInsights ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+            {showInsights ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
           </button>
           {showInsights && (
             <div className="p-5">
-              <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap font-mono bg-[#0f172a]/60 rounded-lg p-4 max-h-64 overflow-y-auto">
+              <div className="clay-sunken p-4 text-xs text-inkbody leading-relaxed whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">
                 {aiInsights}
               </div>
             </div>
           )}
-        </div>
+        </ClayCard>
       )}
     </div>
   );
@@ -139,39 +126,40 @@ function EstimateResult({ calc, form, aiInsights }) {
 function SavedEstimateCard({ estimate, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="bg-[#1e293b]/60 border border-[#334155] rounded-xl overflow-hidden">
-      <div className="flex items-center gap-3 p-4">
+    <ClayCard flat className="overflow-hidden">
+      <div className="flex items-center gap-4 p-5">
+        <IconTile icon={Calculator} tone="lav" size="sm" className="flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white truncate">{estimate.projectDescription?.slice(0, 60) || 'Untitled Estimate'}</p>
-          <p className="text-xs text-slate-500 mt-0.5">{estimate.projectCategory} · {new Date(estimate.updatedAt).toLocaleDateString()}</p>
+          <p className="text-sm font-medium text-ink truncate">{estimate.projectDescription?.slice(0, 60) || 'Untitled estimate'}</p>
+          <p className="text-xs text-muted mt-0.5">{estimate.projectCategory} · {new Date(estimate.updatedAt).toLocaleDateString()}</p>
         </div>
-        <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-white">{formatCurrency(estimate.calc?.total, estimate.currency || 'USD')}</p>
-          <p className="text-xs text-slate-500">{estimate.complexity}</p>
+        <div className="text-right flex-shrink-0 hidden sm:block">
+          <p className="text-base font-bold text-ink">{formatCurrency(estimate.calc?.total, estimate.currency || 'USD')}</p>
+          <p className="text-xs text-muted">{estimate.complexity}</p>
         </div>
-        <button onClick={() => setExpanded(!expanded)} className="p-1.5 text-slate-500 hover:text-slate-300">
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-        <button onClick={() => onDelete(estimate.id)} className="p-1.5 text-slate-500 hover:text-red-400">
-          <Trash2 size={14} />
-        </button>
+        <Button variant="ghost" iconOnly size="sm" onClick={() => setExpanded(!expanded)} aria-label="Toggle details">
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </Button>
+        <Button variant="ghost" iconOnly size="sm" onClick={() => onDelete(estimate.id)} aria-label="Delete estimate">
+          <Trash2 size={15} className="text-danger" />
+        </Button>
       </div>
       {expanded && estimate.calc && (
-        <div className="border-t border-[#334155] p-4 space-y-1.5">
+        <div className="border-t border-line p-5 space-y-2">
           {[
             ['Labor', formatCurrency(estimate.calc.labor, estimate.currency)],
             ['Expenses', formatCurrency(estimate.calc.additionalExpenses, estimate.currency)],
             ['Contingency', formatCurrency(estimate.calc.contingency, estimate.currency)],
             ['Total', formatCurrency(estimate.calc.total, estimate.currency)],
-          ].map(([l, v]) => (
-            <div key={l} className="flex justify-between text-xs">
-              <span className="text-slate-400">{l}</span>
-              <span className="text-white font-medium">{v}</span>
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between text-sm">
+              <span className="text-muted">{label}</span>
+              <span className="text-ink font-medium">{value}</span>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </ClayCard>
   );
 }
 
@@ -182,7 +170,7 @@ export default function Estimator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState([]);
-  const [tab, setTab] = useState('estimator'); // estimator | saved
+  const [tab, setTab] = useState('estimator');
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const loadSaved = () => setSaved(estimateStorage.getAll());
@@ -201,7 +189,7 @@ export default function Estimator() {
     try {
       const status = await checkOllamaAvailability();
       if (!status.available) {
-        setAiInsights('AI is currently unavailable. Please start Ollama to get project analysis. The estimate above is calculated without AI assistance.');
+        setAiInsights('AI is currently unavailable. Start Ollama to get project analysis. The estimate below is still calculated with full accuracy.');
       } else {
         const result = await analyzeProjectForEstimate(form);
         setAiInsights(result);
@@ -216,42 +204,40 @@ export default function Estimator() {
   };
 
   const handleSave = () => {
-    if (!calc) { setError('Calculate estimate first.'); return; }
+    if (!calc) { setError('Calculate the estimate first.'); return; }
     estimateStorage.save({ ...form, calc });
     loadSaved();
     setError('');
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Project Estimator</h1>
-          <p className="text-slate-400 text-sm">Calculate project costs with transparent arithmetic. AI helps identify risks.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTab('estimator')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${tab === 'estimator' ? 'bg-[#1e293b] text-white border border-[#334155]' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            Estimator
-          </button>
-          <button
-            onClick={() => setTab('saved')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${tab === 'saved' ? 'bg-[#1e293b] text-white border border-[#334155]' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            Saved ({saved.length})
-          </button>
-        </div>
-      </div>
+    <div className="p-5 sm:p-7 max-w-5xl mx-auto">
+      <PageHeader
+        title="Project estimator"
+        subtitle="Transparent arithmetic for your project. AI identifies risks and assumptions."
+        actions={
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'estimator', label: 'Estimator', icon: Calculator },
+              { value: 'saved', label: `Saved (${saved.length})`, icon: FolderOpen },
+            ]}
+          />
+        }
+      />
 
       {tab === 'saved' ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {saved.length === 0 ? (
-            <div className="text-center py-16">
-              <Calculator size={32} className="text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 text-sm">No saved estimates yet. Create one in the Estimator tab.</p>
-            </div>
+            <ClayCard flat>
+              <EmptyState
+                icon={Calculator}
+                title="No saved estimates yet"
+                description="Calculate a project cost and save it to keep a record you can revisit."
+                action={<Button variant="secondary" onClick={() => setTab('estimator')}>Go to estimator</Button>}
+              />
+            </ClayCard>
           ) : saved.map(e => (
             <SavedEstimateCard
               key={e.id}
@@ -262,183 +248,113 @@ export default function Estimator() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Form */}
-          <div className="lg:col-span-3 space-y-4">
-            <div className="bg-[#1e293b]/40 border border-[#334155] rounded-xl p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Project Category</label>
-                  <select
-                    value={form.projectCategory}
-                    onChange={e => set('projectCategory', e.target.value)}
-                    className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
-                  >
+          <div className="lg:col-span-3">
+            <ClayCard flat className="p-5 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Project category">
+                  <Select value={form.projectCategory} onChange={e => set('projectCategory', e.target.value)}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Complexity</label>
-                  <select
-                    value={form.complexity}
-                    onChange={e => set('complexity', e.target.value)}
-                    className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
-                  >
+                  </Select>
+                </Field>
+                <Field label="Complexity">
+                  <Select value={form.complexity} onChange={e => set('complexity', e.target.value)}>
                     {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Project Description *</label>
-                <textarea
+              <Field label="Project description" required>
+                <Textarea
                   value={form.projectDescription}
                   onChange={e => set('projectDescription', e.target.value)}
-                  placeholder="Describe the project scope, deliverables, and any technical requirements..."
+                  placeholder="Describe the scope, deliverables and any technical requirements…"
                   rows={4}
-                  className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 resize-none"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Experience Level</label>
-                <select
-                  value={form.experienceLevel}
-                  onChange={e => set('experienceLevel', e.target.value)}
-                  className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
-                >
+              <Field label="Experience level">
+                <Select value={form.experienceLevel} onChange={e => set('experienceLevel', e.target.value)}>
                   {['Junior (0-2 years)', 'Mid-level (3-5 years)', 'Senior (6-10 years)', 'Expert (10+ years)'].map(l => (
                     <option key={l} value={l}>{l}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
 
-              {/* Pricing */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Pricing Preference</label>
-                <div className="flex gap-2 mb-3">
-                  {['hourly', 'fixed'].map(p => (
-                    <button
-                      key={p}
-                      onClick={() => set('pricingPreference', p)}
-                      className={`flex-1 py-2 text-xs font-medium rounded-lg border transition-colors ${
-                        form.pricingPreference === p
-                          ? 'bg-blue-600/20 border-blue-500/40 text-blue-400'
-                          : 'bg-[#1e293b] border-[#334155] text-slate-400 hover:text-slate-300'
-                      }`}
-                    >
-                      {p === 'hourly' ? 'Hourly Rate' : 'Fixed Price'}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                <span className="field-label">Pricing preference</span>
+                <Segmented
+                  className="w-full"
+                  value={form.pricingPreference}
+                  onChange={v => set('pricingPreference', v)}
+                  options={[
+                    { value: 'hourly', label: 'Hourly rate' },
+                    { value: 'fixed', label: 'Fixed price' },
+                  ]}
+                />
+                <div className="grid grid-cols-2 gap-3 mt-3">
                   {form.pricingPreference === 'hourly' ? (
                     <>
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Hourly Rate</label>
-                        <input
-                          type="number"
-                          value={form.hourlyRate}
-                          onChange={e => set('hourlyRate', e.target.value)}
-                          placeholder="75"
-                          min="0"
-                          className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Estimated Hours</label>
-                        <input
-                          type="number"
-                          value={form.estimatedHours}
-                          onChange={e => set('estimatedHours', e.target.value)}
-                          placeholder="40"
-                          min="0"
-                          className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
-                        />
-                      </div>
+                      <Field label="Hourly rate">
+                        <Input type="number" min="0" value={form.hourlyRate} onChange={e => set('hourlyRate', e.target.value)} placeholder="75" />
+                      </Field>
+                      <Field label="Estimated hours">
+                        <Input type="number" min="0" value={form.estimatedHours} onChange={e => set('estimatedHours', e.target.value)} placeholder="40" />
+                      </Field>
                     </>
                   ) : (
-                    <div className="col-span-2">
-                      <label className="block text-xs text-slate-500 mb-1">Fixed Price</label>
-                      <input
-                        type="number"
-                        value={form.fixedPrice}
-                        onChange={e => set('fixedPrice', e.target.value)}
-                        placeholder="5000"
-                        min="0"
-                        className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
-                      />
-                    </div>
+                    <Field label="Fixed price" className="col-span-2">
+                      <Input type="number" min="0" value={form.fixedPrice} onChange={e => set('fixedPrice', e.target.value)} placeholder="5000" />
+                    </Field>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Additional Expenses</label>
-                  <input
-                    type="number"
-                    value={form.additionalExpenses}
-                    onChange={e => set('additionalExpenses', e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Currency</label>
-                  <select
-                    value={form.currency}
-                    onChange={e => set('currency', e.target.value)}
-                    className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
-                  >
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Additional expenses">
+                  <Input type="number" min="0" value={form.additionalExpenses} onChange={e => set('additionalExpenses', e.target.value)} placeholder="0" />
+                </Field>
+                <Field label="Currency">
+                  <Select value={form.currency} onChange={e => set('currency', e.target.value)}>
                     {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                  <AlertCircle size={14} className="text-amber-400 mt-0.5" />
-                  <p className="text-xs text-amber-300">{error}</p>
+                <div className="flex items-start gap-2.5 p-3.5 rounded-[14px]" style={{ background: 'var(--c-warning-soft)' }}>
+                  <AlertCircle size={15} className="text-[var(--c-warning)] mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-inkbody">{error}</p>
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCalculate}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#1e293b] border border-[#334155] hover:border-[#475569] text-slate-200 text-sm font-semibold rounded-xl transition-colors"
-                >
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button variant="secondary" onClick={handleCalculate} className="flex-1 gap-2">
                   <Calculator size={15} /> Calculate
-                </button>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
-                >
+                </Button>
+                <Button variant="primary" onClick={handleAnalyze} disabled={loading} className="flex-1 gap-2">
                   {loading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                  {loading ? 'Analyzing...' : 'Calculate + AI Analysis'}
-                </button>
+                  {loading ? 'Analyzing…' : 'Calculate + AI analysis'}
+                </Button>
               </div>
-            </div>
+            </ClayCard>
           </div>
 
-          {/* Results */}
           <div className="lg:col-span-2 space-y-4">
             {calc ? (
               <>
                 <EstimateResult calc={calc} form={form} aiInsights={aiInsights} />
-                <button
-                  onClick={handleSave}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1e293b] border border-[#334155] hover:border-[#475569] text-slate-200 text-sm font-semibold rounded-xl transition-colors"
-                >
-                  <Save size={14} /> Save Estimate
-                </button>
+                <Button variant="secondary" block onClick={handleSave} className="gap-2">
+                  <Save size={15} /> Save estimate
+                </Button>
               </>
             ) : (
-              <div className="bg-[#1e293b]/30 border border-[#334155] border-dashed rounded-xl p-10 text-center">
-                <Calculator size={32} className="text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">Fill in the form and click Calculate to see your estimate breakdown.</p>
-              </div>
+              <ClayCard flat className="border-dashed">
+                <EmptyState
+                  icon={Calculator}
+                  title="No estimate yet"
+                  description="Fill in the form and hit calculate to see a transparent cost breakdown."
+                />
+              </ClayCard>
             )}
           </div>
         </div>

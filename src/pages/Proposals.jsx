@@ -1,11 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Plus, FileText, Trash2, Copy, Download, Edit3,
-  Sparkles, AlertCircle, Loader2, ChevronDown, ChevronUp,
-  X, Save, Printer
+  Plus, FileText, Trash2, Copy, Edit3, Sparkles,
+  AlertCircle, Loader2, ChevronDown, ChevronUp,
+  Save, Printer, Search, CheckCircle
 } from 'lucide-react';
 import { proposalStorage } from '../services/storage';
 import { generateProposal, fallbackTemplates, checkOllamaAvailability } from '../services/ai';
+import {
+  Button, ClayCard, IconTile, Field, Input, Textarea, Select,
+  Badge, Modal, ModalHeader, EmptyState, PageHeader, Toggle, PrintPortal
+} from '../components/ui';
 
 const TONES = ['Professional', 'Friendly', 'Formal', 'Concise', 'Enthusiastic'];
 const EMPTY_FORM = {
@@ -15,7 +19,6 @@ const EMPTY_FORM = {
 };
 
 function MarkdownPreview({ content }) {
-  // Simple markdown to HTML renderer
   const html = content
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -26,77 +29,98 @@ function MarkdownPreview({ content }) {
     .replace(/(<li>.*<\/li>)/gs, (m) => `<ul>${m}</ul>`)
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     .replace(/^---$/gm, '<hr />')
-    .replace(/\[REQUIRED: (.+?)\]/g, '<mark class="bg-amber-400/20 text-amber-300 px-1 rounded text-xs">[REQUIRED: $1]</mark>')
+    .replace(/\[REQUIRED: (.+?)\]/g, '<mark>[REQUIRED: $1]</mark>')
     .split('\n\n')
     .map(p => p.startsWith('<') ? p : `<p>${p}</p>`)
     .join('\n');
 
-  return (
-    <div
-      className="prose-document text-sm leading-relaxed"
-      style={{ color: '#e2e8f0' }}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div className="prose-document text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function ProposalCard({ proposal, onEdit, onDelete, onDuplicate }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  useEffect(() => {
+    if (!printing) return;
+    const id = requestAnimationFrame(() => {
+      window.print();
+      setPrinting(false);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [printing]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(proposal.content || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="bg-[#1e293b]/60 border border-[#334155] rounded-xl overflow-hidden hover:border-[#475569] transition-colors">
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white text-sm truncate">
-              {proposal.title || proposal.projectTitle || 'Untitled Proposal'}
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {proposal.clientName && `For ${proposal.clientName} · `}
-              {new Date(proposal.updatedAt).toLocaleDateString()}
-            </p>
+    <ClayCard flat className="overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3.5 min-w-0">
+            <IconTile icon={FileText} tone="accent" size="sm" className="flex-shrink-0" />
+            <div className="min-w-0">
+              <h3 className="font-semibold text-ink text-sm truncate">
+                {proposal.title || proposal.projectTitle || 'Untitled proposal'}
+              </h3>
+              <p className="text-xs text-muted mt-1">
+                {proposal.clientName && `For ${proposal.clientName} · `}
+                {new Date(proposal.updatedAt).toLocaleDateString()}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => onEdit(proposal)} className="p-1.5 text-slate-500 hover:text-blue-400 transition-colors" title="Edit">
-              <Edit3 size={14} />
-            </button>
-            <button onClick={() => onDuplicate(proposal.id)} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors" title="Duplicate">
-              <Copy size={14} />
-            </button>
-            <button onClick={() => onDelete(proposal.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
-              <Trash2 size={14} />
-            </button>
+            <Button variant="ghost" iconOnly size="sm" onClick={() => onEdit(proposal)} title="Edit" aria-label="Edit proposal">
+              <Edit3 size={15} />
+            </Button>
+            <Button variant="ghost" iconOnly size="sm" onClick={() => onDuplicate(proposal.id)} title="Duplicate" aria-label="Duplicate proposal">
+              <Copy size={15} />
+            </Button>
+            <Button variant="ghost" iconOnly size="sm" onClick={() => onDelete(proposal.id)} title="Delete" aria-label="Delete proposal">
+              <Trash2 size={15} className="text-danger" />
+            </Button>
           </div>
         </div>
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accentink hover:underline"
         >
-          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          {expanded ? 'Hide' : 'Preview'}
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          {expanded ? 'Hide preview' : 'Preview'}
         </button>
       </div>
       {expanded && (
-        <div className="border-t border-[#334155] p-4 bg-[#0f172a]/40">
-          <MarkdownPreview content={proposal.content || ''} />
-          <div className="flex gap-2 mt-4 pt-4 border-t border-[#334155]">
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(proposal.content || '');
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 bg-[#1e293b] hover:bg-[#334155] rounded-lg transition-colors"
-            >
-              <Copy size={12} /> Copy
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 bg-[#1e293b] hover:bg-[#334155] rounded-lg transition-colors"
-            >
-              <Printer size={12} /> Print/PDF
-            </button>
+        <div className="border-t border-line p-5 bg-app/50">
+          <div className="clay-sunken p-5 max-h-[26rem] overflow-y-auto">
+            <MarkdownPreview content={proposal.content || ''} />
+          </div>
+          <div className="flex gap-2.5 mt-4">
+            <Button variant="secondary" size="sm" onClick={handleCopy} className="gap-1.5">
+              {copied ? <CheckCircle size={13} className="text-[var(--c-success)]" /> : <Copy size={13} />}
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPrinting(true)} className="gap-1.5">
+              <Printer size={13} /> Print / PDF
+            </Button>
           </div>
         </div>
       )}
-    </div>
+
+      {printing && (
+        <PrintPortal>
+          <div className="bg-white text-[#111827] p-2">
+            <p className="text-2xl font-bold mb-1">{proposal.title || proposal.projectTitle || 'Proposal'}</p>
+            {proposal.clientName && <p className="text-sm text-[#4b5563] mb-6">Prepared for {proposal.clientName}</p>}
+            <MarkdownPreview content={proposal.content || ''} />
+          </div>
+        </PrintPortal>
+      )}
+    </ClayCard>
   );
 }
 
@@ -107,7 +131,6 @@ function ProposalForm({ initial, onClose, onSaved }) {
   const [error, setError] = useState('');
   const [aiMode, setAiMode] = useState(true);
   const [generated, setGenerated] = useState(!!initial?.content);
-  const textareaRef = useRef(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -157,176 +180,123 @@ function ProposalForm({ initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-y-auto p-4">
-      <div className="w-full max-w-3xl bg-[#0f172a] border border-[#334155] rounded-2xl my-4 overflow-hidden animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e293b]">
-          <div className="flex items-center gap-2">
-            <FileText size={18} className="text-blue-400" />
-            <h2 className="text-base font-semibold text-white">
-              {initial ? 'Edit Proposal' : 'New Proposal'}
-            </h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-white transition-colors">
-            <X size={18} />
-          </button>
+    <Modal onClose={onClose} size="xl">
+      <ModalHeader icon={FileText} title={initial ? 'Edit proposal' : 'New proposal'} onClose={onClose} />
+
+      <div className="p-5 sm:p-7 space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Client / company name">
+            <Input
+              value={form.clientName}
+              onChange={e => set('clientName', e.target.value)}
+              placeholder="Acme Corp"
+            />
+          </Field>
+          <Field label="Project title" required>
+            <Input
+              value={form.projectTitle}
+              onChange={e => set('projectTitle', e.target.value)}
+              placeholder="E-commerce website redesign"
+            />
+          </Field>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Form */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { key: 'clientName', label: 'Client / Company Name', placeholder: 'Acme Corp' },
-              { key: 'projectTitle', label: 'Project Title *', placeholder: 'E-commerce Website Redesign' },
-            ].map(({ key, label, placeholder }) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">{label}</label>
-                <input
-                  type="text"
-                  value={form[key]}
-                  onChange={e => set(key, e.target.value)}
-                  placeholder={placeholder}
-                  className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
-                />
-              </div>
-            ))}
-          </div>
+        <Field label="Project description" required>
+          <Textarea
+            value={form.projectDescription}
+            onChange={e => set('projectDescription', e.target.value)}
+            placeholder="Describe the project, its goals, and what the client wants to achieve…"
+            rows={3}
+          />
+        </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">Project Description *</label>
-            <textarea
-              value={form.projectDescription}
-              onChange={e => set('projectDescription', e.target.value)}
-              placeholder="Describe the project, its goals, and what the client wants to achieve..."
-              rows={3}
-              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors resize-none"
+        <Field label="Services included" hint="Comma separated — e.g. UI design, Frontend development, SEO">
+          <Input
+            value={form.servicesIncluded}
+            onChange={e => set('servicesIncluded', e.target.value)}
+            placeholder="UI design, Frontend development, SEO optimization"
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Estimated budget">
+            <Input
+              value={form.estimatedBudget}
+              onChange={e => set('estimatedBudget', e.target.value)}
+              placeholder="$5,000 – $8,000"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">Services Included</label>
-            <input
-              type="text"
-              value={form.servicesIncluded}
-              onChange={e => set('servicesIncluded', e.target.value)}
-              placeholder="UI Design, Frontend Development, SEO Optimization"
-              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
+          </Field>
+          <Field label="Timeline">
+            <Input
+              value={form.deliveryTimeline}
+              onChange={e => set('deliveryTimeline', e.target.value)}
+              placeholder="6 weeks"
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">Estimated Budget</label>
-              <input
-                type="text"
-                value={form.estimatedBudget}
-                onChange={e => set('estimatedBudget', e.target.value)}
-                placeholder="$5,000 – $8,000"
-                className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">Timeline</label>
-              <input
-                type="text"
-                value={form.deliveryTimeline}
-                onChange={e => set('deliveryTimeline', e.target.value)}
-                placeholder="6 weeks"
-                className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">Tone</label>
-              <select
-                value={form.tone}
-                onChange={e => set('tone', e.target.value)}
-                className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors"
-              >
-                {TONES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">Additional Requirements</label>
-            <textarea
-              value={form.additionalRequirements}
-              onChange={e => set('additionalRequirements', e.target.value)}
-              placeholder="Any special requirements, constraints, or context..."
-              rows={2}
-              className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors resize-none"
-            />
-          </div>
-
-          {/* AI Toggle */}
-          <div className="flex items-center gap-3 p-3 bg-[#1e293b]/60 rounded-lg border border-[#334155]">
-            <Sparkles size={15} className={aiMode ? 'text-blue-400' : 'text-slate-600'} />
-            <span className="text-xs text-slate-400 flex-1">
-              {aiMode ? 'Using Ollama AI (requires local model)' : 'Using fallback template (no AI)'}
-            </span>
-            <button
-              onClick={() => setAiMode(!aiMode)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${aiMode ? 'bg-blue-600' : 'bg-[#334155]'}`}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${aiMode ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <AlertCircle size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-amber-300">{error}</p>
-            </div>
-          )}
-
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800/50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-          >
-            {loading ? (
-              <><Loader2 size={15} className="animate-spin" /> Generating with AI...</>
-            ) : (
-              <><Sparkles size={15} /> {generated ? 'Regenerate Proposal' : 'Generate Proposal'}</>
-            )}
-          </button>
-
-          {/* Editable content */}
-          {generated && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-slate-400">Generated Proposal (editable)</label>
-                <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                  {aiMode ? '✦ AI Generated' : '⚠ Template — Review before use'}
-                </span>
-              </div>
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                rows={16}
-                className="w-full bg-[#1e293b] border border-[#334155] rounded-lg px-4 py-3 text-xs text-slate-300 font-mono focus:outline-none focus:border-blue-500/50 transition-colors resize-none"
-              />
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2 border-t border-[#1e293b]">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!content.trim()}
-              className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-            >
-              <Save size={14} /> Save Proposal
-            </button>
-          </div>
+          </Field>
+          <Field label="Tone">
+            <Select value={form.tone} onChange={e => set('tone', e.target.value)}>
+              {TONES.map(t => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </Field>
         </div>
+
+        <Field label="Additional requirements">
+          <Textarea
+            value={form.additionalRequirements}
+            onChange={e => set('additionalRequirements', e.target.value)}
+            placeholder="Any special requirements, constraints or context…"
+            rows={2}
+          />
+        </Field>
+
+        <div className="clay-sunken flex items-center gap-3 p-4">
+          <Sparkles size={16} className={aiMode ? 'text-accent' : 'text-muted'} />
+          <span className="text-xs text-muted flex-1">
+            {aiMode ? 'Using Ollama AI — requires a local model running.' : 'Using the built-in template (no AI).'}
+          </span>
+          <Toggle checked={aiMode} onChange={setAiMode} label="Toggle AI generation" />
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2.5 p-3.5 rounded-[14px]" style={{ background: 'var(--c-warning-soft)' }}>
+            <AlertCircle size={15} className="text-[var(--c-warning)] mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-inkbody">{error}</p>
+          </div>
+        )}
+
+        <Button variant="primary" block onClick={handleGenerate} disabled={loading} className="gap-2">
+          {loading ? (
+            <><Loader2 size={15} className="animate-spin" /> Generating with AI…</>
+          ) : (
+            <><Sparkles size={15} /> {generated ? 'Regenerate proposal' : 'Generate proposal'}</>
+          )}
+        </Button>
+
+        {generated && (
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <label className="field-label mb-0">Generated proposal</label>
+              <Badge tone={aiMode ? 'accent' : 'warning'}>
+                {aiMode ? <><Sparkles size={11} /> AI generated</> : 'Template · review before use'}
+              </Badge>
+            </div>
+            <Textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              rows={16}
+              className="font-mono text-xs"
+            />
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="flex justify-end gap-3 px-5 sm:px-7 py-4 border-t border-line">
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSave} disabled={!content.trim()} className="gap-2">
+          <Save size={14} /> Save proposal
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -356,55 +326,46 @@ export default function Proposals() {
   );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Proposals</h1>
-          <p className="text-slate-400 text-sm">{proposals.length} saved proposal{proposals.length !== 1 ? 's' : ''}</p>
-        </div>
-        <button
-          onClick={() => { setEditProposal(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
-        >
-          <Plus size={15} /> New Proposal
-        </button>
-      </div>
+    <div className="p-5 sm:p-7 max-w-5xl mx-auto">
+      <PageHeader
+        title="Proposals"
+        subtitle={`${proposals.length} saved proposal${proposals.length !== 1 ? 's' : ''}`}
+        actions={
+          <Button variant="primary" onClick={() => { setEditProposal(null); setShowForm(true); }} className="gap-1.5">
+            <Plus size={15} /> New proposal
+          </Button>
+        }
+      />
 
       {proposals.length > 0 && (
-        <input
-          type="text"
-          placeholder="Search proposals..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full mb-4 bg-[#1e293b] border border-[#334155] rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50 transition-colors"
-        />
+        <div className="relative mb-5">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+          <Input
+            className="pl-11"
+            placeholder="Search proposals…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
       )}
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center mx-auto mb-5">
-            <FileText size={24} className="text-slate-600" />
-          </div>
-          <h2 className="text-white font-semibold mb-2">
-            {proposals.length === 0 ? 'No proposals yet' : 'No results found'}
-          </h2>
-          <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">
-            {proposals.length === 0
-              ? 'Create your first AI-powered proposal. Fill in the project details and let HustlePilot AI draft it for you.'
+        <ClayCard flat>
+          <EmptyState
+            icon={FileText}
+            title={proposals.length === 0 ? 'No proposals yet' : 'No results found'}
+            description={proposals.length === 0
+              ? 'Create your first AI-powered proposal. Add the project details and let HustlePilot draft it for you.'
               : 'Try a different search term.'}
-          </p>
-          {proposals.length === 0 && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors mx-auto"
-            >
-              <Plus size={15} /> Create First Proposal
-            </button>
-          )}
-        </div>
+            action={proposals.length === 0 && (
+              <Button variant="primary" onClick={() => setShowForm(true)} className="gap-1.5">
+                <Plus size={15} /> Create first proposal
+              </Button>
+            )}
+          />
+        </ClayCard>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {filtered.map(p => (
             <ProposalCard
               key={p.id}
@@ -417,7 +378,6 @@ export default function Proposals() {
         </div>
       )}
 
-      {/* Form Modal */}
       {showForm && (
         <ProposalForm
           initial={editProposal}
@@ -426,18 +386,20 @@ export default function Proposals() {
         />
       )}
 
-      {/* Delete Confirm */}
       {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-6 max-w-sm w-full animate-fade-in">
-            <h3 className="text-white font-semibold mb-2">Delete Proposal?</h3>
-            <p className="text-slate-400 text-sm mb-5">This action cannot be undone.</p>
+        <Modal onClose={() => setDeleteId(null)} size="sm">
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <IconTile icon={Trash2} tone="danger" size="sm" />
+              <h3 className="text-ink font-semibold">Delete proposal?</h3>
+            </div>
+            <p className="text-muted text-sm mb-6">This action cannot be undone.</p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteId(null)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
-              <button onClick={() => handleDelete(deleteId)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg transition-colors">Delete</button>
+              <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>
+              <Button variant="danger" onClick={() => handleDelete(deleteId)}>Delete</Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -1,90 +1,64 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  FileText, Receipt, TrendingUp, Clock, Plus,
+  FileText, Receipt, TrendingUp, Clock, Plus, Calculator,
   AlertCircle, ChevronRight, BarChart2, DollarSign,
-  CheckCircle, AlertTriangle
+  CheckCircle, AlertTriangle, MessageSquare, Sparkles
 } from 'lucide-react';
 import { proposalStorage, invoiceStorage, communicationStorage, estimateStorage } from '../services/storage';
+import { ClayCard, IconTile, Button, Badge, PageHeader } from '../components/ui';
 
-function StatCard({ icon: Icon, label, value, sub, color = 'blue', linkTo }) {
-  const colors = {
-    blue: 'text-blue-400 bg-blue-500/10',
-    green: 'text-green-400 bg-green-500/10',
-    amber: 'text-amber-400 bg-amber-500/10',
-    red: 'text-red-400 bg-red-500/10',
-    purple: 'text-purple-400 bg-purple-500/10',
-  };
-  const card = (
-    <div className="bg-[#1e293b]/60 border border-[#334155] rounded-xl p-5 hover:border-[#475569] transition-colors">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <Icon size={18} />
-        </div>
-        {linkTo && <ChevronRight size={16} className="text-slate-600" />}
-      </div>
-      <div className="text-2xl font-bold text-white mb-0.5">{value}</div>
-      <div className="text-sm text-slate-400">{label}</div>
-      {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
-    </div>
-  );
-  return linkTo ? <Link to={linkTo}>{card}</Link> : card;
-}
+const TYPE_META = {
+  proposal: { label: 'Proposal', icon: FileText, tone: 'accent' },
+  invoice: { label: 'Invoice', icon: Receipt, tone: 'mint' },
+  communication: { label: 'Message', icon: MessageSquare, tone: 'peach' },
+  estimate: { label: 'Estimate', icon: Calculator, tone: 'lav' },
+};
 
-function EmptyState({ icon: Icon, title, description, linkTo, linkLabel }) {
-  return (
-    <div className="text-center py-10 px-6">
-      <div className="w-12 h-12 rounded-xl bg-[#1e293b] flex items-center justify-center mx-auto mb-4">
-        <Icon size={22} className="text-slate-600" />
-      </div>
-      <h3 className="text-slate-300 font-medium text-sm mb-1">{title}</h3>
-      <p className="text-slate-500 text-xs mb-4 max-w-xs mx-auto">{description}</p>
-      {linkTo && (
-        <Link
-          to={linkTo}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs font-medium rounded-lg hover:bg-blue-600/30 transition-colors"
-        >
-          <Plus size={13} /> {linkLabel}
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function RecentItem({ title, type, date, status, statusColor }) {
-  const typeColors = {
-    proposal: 'bg-blue-500/10 text-blue-400',
-    invoice: 'bg-emerald-500/10 text-emerald-400',
-    communication: 'bg-amber-500/10 text-amber-400',
-    estimate: 'bg-purple-500/10 text-purple-400',
-  };
-  return (
-    <div className="flex items-center gap-3 py-3 border-b border-[#1e293b] last:border-0">
-      <span className={`text-xs px-2 py-0.5 rounded font-medium ${typeColors[type] || typeColors.proposal}`}>
-        {type}
-      </span>
-      <span className="text-sm text-slate-300 flex-1 truncate">{title}</span>
-      {status && (
-        <span className={`text-xs px-2 py-0.5 rounded border ${statusColor}`}>{status}</span>
-      )}
-      <span className="text-xs text-slate-600 flex-shrink-0">{new Date(date).toLocaleDateString()}</span>
-    </div>
-  );
-}
-
-function getStatusStyle(status) {
-  const map = {
-    draft: 'border-slate-500/30 text-slate-400',
-    sent: 'border-blue-500/30 text-blue-400',
-    paid: 'border-green-500/30 text-green-400',
-    overdue: 'border-red-500/30 text-red-400',
-  };
-  return map[status] || map.draft;
-}
+const STATUS_TONE = {
+  draft: 'neutral',
+  sent: 'accent',
+  paid: 'success',
+  overdue: 'danger',
+};
 
 function formatCurrency(amount, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount || 0);
 }
+
+function StatCard({ icon, tone, label, value, sub }) {
+  return (
+    <ClayCard interactive className="p-5">
+      <div className="flex items-start justify-between mb-4">
+        <IconTile icon={icon} tone={tone} size="sm" />
+      </div>
+      <div className="text-2xl font-bold text-ink leading-none">{value}</div>
+      <div className="text-sm text-muted mt-2">{label}</div>
+      {sub && <div className="text-xs text-muted mt-1">{sub}</div>}
+    </ClayCard>
+  );
+}
+
+function RecentRow({ title, type, date, status }) {
+  const meta = TYPE_META[type] || TYPE_META.proposal;
+  return (
+    <div className="flex items-center gap-3 py-3.5 border-b border-line last:border-0">
+      <IconTile icon={meta.icon} tone={meta.tone} size="sm" className="flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-ink font-medium truncate">{title}</p>
+        <p className="text-xs text-muted mt-0.5">{meta.label} · {new Date(date).toLocaleDateString()}</p>
+      </div>
+      {status && <Badge tone={STATUS_TONE[status] || 'neutral'} className="flex-shrink-0 capitalize">{status}</Badge>}
+    </div>
+  );
+}
+
+const QUICK_ACTIONS = [
+  { to: '/proposals', icon: FileText, label: 'New proposal', tone: 'accent' },
+  { to: '/invoices', icon: Receipt, label: 'New invoice', tone: 'mint' },
+  { to: '/estimator', icon: TrendingUp, label: 'Estimate project', tone: 'lav' },
+  { to: '/communications', icon: MessageSquare, label: 'Draft message', tone: 'peach' },
+];
 
 export default function Dashboard() {
   const [proposals, setProposals] = useState([]);
@@ -113,124 +87,126 @@ export default function Dashboard() {
     ...estimates.map(e => ({ ...e, docType: 'estimate' })),
   ]
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .slice(0, 7);
+    .slice(0, 6);
 
-  const isEmpty = proposals.length === 0 && invoices.length === 0 && communications.length === 0;
+  const isEmpty = proposals.length === 0 && invoices.length === 0 && communications.length === 0 && estimates.length === 0;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-1">Dashboard</h1>
-        <p className="text-slate-400 text-sm">Your business overview at a glance.</p>
-      </div>
+    <div className="p-5 sm:p-7 max-w-6xl mx-auto">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Your business at a glance — built from the documents you've saved."
+        actions={
+          <Button as={Link} to="/proposals" variant="primary" size="sm" className="gap-1.5">
+            <Plus size={15} /> New proposal
+          </Button>
+        }
+      />
 
       {isEmpty ? (
-        <div className="bg-[#1e293b]/40 border border-[#334155] border-dashed rounded-2xl p-12 text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center mx-auto mb-5">
-            <BarChart2 size={26} className="text-slate-600" />
-          </div>
-          <h2 className="text-white font-semibold mb-2">Welcome to HustlePilot AI</h2>
-          <p className="text-slate-400 text-sm max-w-md mx-auto mb-6">
-            Your dashboard will show real stats once you start creating proposals, invoices, and documents.
-            Get started with one of the tools below.
+        <ClayCard className="p-8 sm:p-12 text-center mb-8">
+          <IconTile icon={Sparkles} tone="accent" size="lg" className="mx-auto mb-6" />
+          <h2 className="text-xl font-bold text-ink mb-2">Welcome to HustlePilot AI</h2>
+          <p className="text-muted text-sm max-w-md mx-auto mb-8 leading-relaxed">
+            This workspace fills up as you work. Create a proposal, invoice or estimate and your real
+            numbers and recent activity will appear here.
           </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <Link to="/proposals" className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-sm font-medium rounded-lg hover:bg-blue-600/30 transition-colors">
-              <FileText size={15} /> New Proposal
-            </Link>
-            <Link to="/invoices" className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-sm font-medium rounded-lg hover:bg-emerald-600/30 transition-colors">
-              <Receipt size={15} /> New Invoice
-            </Link>
-            <Link to="/estimator" className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 border border-purple-500/30 text-purple-400 text-sm font-medium rounded-lg hover:bg-purple-600/30 transition-colors">
-              <TrendingUp size={15} /> Estimate Project
-            </Link>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+            {[
+              { to: '/proposals', icon: FileText, tone: 'accent', title: 'Write a proposal', desc: 'Draft and save client proposals' },
+              { to: '/invoices', icon: Receipt, tone: 'mint', title: 'Create an invoice', desc: 'Bill with automatic totals' },
+              { to: '/estimator', icon: Calculator, tone: 'lav', title: 'Estimate a project', desc: 'Cost it out with clear math' },
+            ].map(({ to, icon, tone, title, desc }) => (
+              <Link key={to} to={to} className="clay-panel clay-interactive p-5 text-left flex flex-col gap-3">
+                <IconTile icon={icon} tone={tone} size="sm" />
+                <div>
+                  <p className="text-sm font-semibold text-ink">{title}</p>
+                  <p className="text-xs text-muted mt-0.5">{desc}</p>
+                </div>
+              </Link>
+            ))}
           </div>
-        </div>
+        </ClayCard>
       ) : (
         <>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard icon={FileText} label="Proposals" value={proposals.length} linkTo="/proposals" color="blue" />
-            <StatCard icon={Receipt} label="Invoices" value={invoices.length} linkTo="/invoices" color="green" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard icon={FileText} tone="accent" label="Proposals" value={proposals.length} />
+            <StatCard icon={Receipt} tone="mint" label="Invoices" value={invoices.length} />
             <StatCard
               icon={DollarSign}
-              label="Total Invoiced"
+              tone="lav"
+              label="Total invoiced"
               value={formatCurrency(totalInvoiced)}
               sub={`${formatCurrency(totalPaid)} paid`}
-              color="purple"
             />
             <StatCard
               icon={overdueCount > 0 ? AlertTriangle : CheckCircle}
+              tone={overdueCount > 0 ? 'danger' : 'mint'}
               label="Outstanding"
               value={formatCurrency(totalOutstanding)}
               sub={overdueCount > 0 ? `${overdueCount} overdue` : 'All current'}
-              color={overdueCount > 0 ? 'red' : 'green'}
-              linkTo="/invoices"
             />
           </div>
 
           {overdueCount > 0 && (
-            <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-6">
-              <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <div className="text-sm font-medium text-red-300">Overdue Invoices</div>
-                <div className="text-xs text-red-400/70 mt-0.5">
-                  You have {overdueCount} overdue {overdueCount === 1 ? 'invoice' : 'invoices'}.{' '}
-                  <Link to="/invoices" className="underline hover:text-red-300">View invoices →</Link>
-                </div>
+            <div className="flex items-start gap-3.5 p-4 mb-6 rounded-[20px] border border-[var(--c-line2)]" style={{ background: 'var(--c-danger-soft)' }}>
+              <AlertCircle size={18} className="text-[var(--c-danger)] mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-[var(--c-danger)]">Overdue invoices</p>
+                <p className="text-xs text-inkbody mt-0.5">
+                  {overdueCount} {overdueCount === 1 ? 'invoice needs' : 'invoices need'} follow-up.{' '}
+                  <Link to="/invoices" className="underline underline-offset-2 font-medium">View invoices</Link>
+                </p>
               </div>
             </div>
           )}
         </>
       )}
 
-      {/* Recent Activity */}
       {recentDocs.length > 0 && (
-        <div className="bg-[#1e293b]/40 border border-[#334155] rounded-xl">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[#334155]">
-            <div className="flex items-center gap-2">
-              <Clock size={15} className="text-slate-500" />
-              <h2 className="text-sm font-semibold text-white">Recent Documents</h2>
+        <ClayCard flat className="overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+            <div className="flex items-center gap-3">
+              <IconTile icon={Clock} tone="neutral" size="sm" />
+              <h2 className="text-sm font-semibold text-ink">Recent documents</h2>
             </div>
-            <Link to="/documents" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <Link to="/documents" className="text-xs font-medium text-accentink hover:underline flex items-center gap-1">
               View all <ChevronRight size={13} />
             </Link>
           </div>
-          <div className="px-5 pb-2">
+          <div className="px-5">
             {recentDocs.map(doc => (
-              <RecentItem
+              <RecentRow
                 key={doc.id}
                 title={doc.title || doc.projectTitle || doc.subject || doc.projectDescription || 'Untitled'}
                 type={doc.docType}
                 date={doc.updatedAt}
                 status={doc.status}
-                statusColor={getStatusStyle(doc.status)}
               />
+            ))}
+          </div>
+        </ClayCard>
+      )}
+
+      {!isEmpty && (
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-ink mb-3">Quick actions</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {QUICK_ACTIONS.map(({ to, icon: Icon, label, tone }) => (
+              <Link key={to} to={to} className="clay-panel clay-interactive p-4 flex items-center gap-3">
+                <IconTile icon={Icon} tone={tone} size="sm" className="flex-shrink-0" />
+                <span className="text-sm font-medium text-ink">{label}</span>
+              </Link>
             ))}
           </div>
         </div>
       )}
 
-      {/* Quick Actions (always shown) */}
       {!isEmpty && (
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { to: '/proposals', icon: FileText, label: 'New Proposal', color: 'text-blue-400' },
-            { to: '/invoices', icon: Receipt, label: 'New Invoice', color: 'text-emerald-400' },
-            { to: '/estimator', icon: TrendingUp, label: 'Estimate Project', color: 'text-purple-400' },
-            { to: '/communications', icon: AlertCircle, label: 'Draft Message', color: 'text-amber-400' },
-          ].map(({ to, icon: Icon, label, color }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex items-center gap-2.5 p-3.5 bg-[#1e293b]/40 border border-[#334155] rounded-xl hover:border-[#475569] hover:bg-[#1e293b]/70 transition-all text-sm text-slate-300"
-            >
-              <Plus size={14} className="text-slate-500" />
-              <Icon size={15} className={color} />
-              <span className="text-xs font-medium">{label}</span>
-            </Link>
-          ))}
+        <div className="mt-6 flex justify-center">
+          <Button as={Link} to="/documents" variant="ghost" size="sm" className="gap-1.5">
+            <BarChart2 size={15} /> Browse all documents
+          </Button>
         </div>
       )}
     </div>
